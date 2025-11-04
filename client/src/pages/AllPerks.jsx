@@ -1,60 +1,87 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react' // === ADDED useRef ===
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 
 export default function AllPerks() {
-  
- 
   const [perks, setPerks] = useState([])
-
   const [searchQuery, setSearchQuery] = useState('')
-
- 
   const [merchantFilter, setMerchantFilter] = useState('')
-
- 
   const [uniqueMerchants, setUniqueMerchants] = useState([])
-
-  
   const [loading, setLoading] = useState(true)
-
-  
   const [error, setError] = useState('')
+
+  // === ADDED ===
+  // Ref to prevent the auto-search effect from running on the initial mount
+  const isInitialMount = useRef(true)
 
   // ==================== SIDE EFFECTS WITH useEffect HOOK ====================
 
- /*
- TODO: HOOKS TO IMPLEMENT
- * useEffect Hook #1: Initial Data Loading
- * useEffect Hook #2: Auto-search on Input Change
+  // === ADDED: useEffect Hook #1: Initial Data Loading ===
+  /**
+   * This effect runs *only once* when the component first mounts
+   * because it has an empty dependency array [].
+   * It provides the initial list of all perks.
+   */
+  useEffect(() => {
+    loadAllPerks()
+    // We disable the linter warning because we *intentionally*
+    // only want this to run once on mount, not when loadAllPerks changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Empty array = run on mount
 
-*/
+  // === ADDED: useEffect Hook #2: Auto-search on Input Change ===
+  /**
+   * This effect runs *every time* searchQuery or merchantFilter changes.
+   * It skips the *initial mount* (which Hook #1 handles) using the isInitialMount ref.
+   * It uses a setTimeout to "debounce" the API call, waiting 500ms
+   * after the user stops typing before sending the request.
+   */
+  useEffect(() => {
+    // Check if this is the very first render
+    if (isInitialMount.current) {
+      isInitialMount.current = false // Set ref to false
+      return // And skip the rest of this effect
+    }
 
-  
+    // Set up a timer to run the search
+    const timerId = setTimeout(() => {
+      loadAllPerks()
+    }, 500) // 500ms debounce delay
+
+    // Cleanup function: If the user types again,
+    // clear the previous timer to cancel the pending search.
+    return () => {
+      clearTimeout(timerId)
+    }
+
+    // We disable the linter warning for the same reason as above.
+    // We are manually controlling this effect with the filter states.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, merchantFilter]) // Dependencies: run when these change
+
   useEffect(() => {
     // Extract all merchant names from perks array
     const merchants = perks
       .map(perk => perk.merchant) // Get merchant from each perk
       .filter(merchant => merchant && merchant.trim()) // Remove empty/null values
-    
+
     // Create array of unique merchants using Set
     // Set automatically removes duplicates, then we convert back to array
     const unique = [...new Set(merchants)]
-    
+
     // Update state with unique merchants
     setUniqueMerchants(unique)
-    
+
     // This effect depends on [perks], so it re-runs whenever perks changes
   }, [perks]) // Dependency: re-run when perks array changes
 
-  
   async function loadAllPerks() {
     // Reset error state before new request
     setError('')
-    
+
     // Show loading indicator
     setLoading(true)
-    
+
     try {
       // Make GET request to /api/perks/all with query parameters
       const res = await api.get('/perks/all', {
@@ -65,15 +92,13 @@ export default function AllPerks() {
           merchant: merchantFilter.trim() || undefined
         }
       })
-      
+
       // Update perks state with response data
       setPerks(res.data.perks)
-      
     } catch (err) {
       // Handle errors (network failure, server error, etc.)
       console.error('Failed to load perks:', err)
       setError(err?.response?.data?.message || 'Failed to load perks')
-      
     } finally {
       // This block runs whether try succeeds or catch handles error
       // Always stop loading indicator
@@ -83,17 +108,15 @@ export default function AllPerks() {
 
   // ==================== EVENT HANDLERS ====================
 
-  
   function handleSearch(e) {
     // Prevent default form submission behavior (page reload)
     e.preventDefault()
-    
+
     // Immediately reload perks with current search and filter values
     // This bypasses the debounce delay for instant results
     loadAllPerks()
   }
 
-  
   function handleReset() {
     // Reset search and filter states to empty
     // The useEffect with [searchQuery, merchantFilter] dependencies
@@ -102,16 +125,13 @@ export default function AllPerks() {
     setMerchantFilter('')
   }
 
-  
-  
   return (
     /*
-    TODO: HTML INPUT HANDLERS
- * Update state when user types in search box
- * update state when user selects filter
-    */
+     TODO: HTML INPUT HANDLERS
+     * Update state when user types in search box
+     * update state when user selects filter
+     */
     <div className="max-w-6xl mx-auto space-y-6">
-      
       {/* Page Title */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">All Perks</h1>
@@ -123,10 +143,7 @@ export default function AllPerks() {
       {/* Search and Filter Form */}
       <div className="card">
         <form onSubmit={handleSearch} className="space-y-4">
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-            
             <div>
               <label className="block text-sm font-medium text-zinc-700 mb-2">
                 <span className="material-symbols-outlined text-sm align-middle">search</span>
@@ -136,7 +153,9 @@ export default function AllPerks() {
                 type="text"
                 className="input"
                 placeholder="Enter perk name..."
-                
+                // === ADDED: Controlled component props ===
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
               />
               <p className="text-xs text-zinc-500 mt-1">
                 Auto-searches as you type, or press Enter / click Search
@@ -151,10 +170,12 @@ export default function AllPerks() {
               </label>
               <select
                 className="input"
-                
+                // === ADDED: Controlled component props ===
+                value={merchantFilter}
+                onChange={e => setMerchantFilter(e.target.value)}
               >
                 <option value="">All Merchants</option>
-                
+
                 {uniqueMerchants.map(merchant => (
                   <option key={merchant} value={merchant}>
                     {merchant}
@@ -170,15 +191,15 @@ export default function AllPerks() {
               <span className="material-symbols-outlined text-sm align-middle">search</span>
               {' '}Search Now
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={handleReset}
               className="btn"
             >
               <span className="material-symbols-outlined text-sm align-middle">refresh</span>
               {' '}Reset Filters
             </button>
-            
+
             {/* Loading indicator */}
             {loading && (
               <div className="flex items-center gap-2 text-sm text-zinc-600">
@@ -207,17 +228,14 @@ export default function AllPerks() {
 
       {/* Perks Grid - Always visible, updates in place */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        
-        {/* 
-          Conditional Rendering with map():
+        {/* Conditional Rendering with map():
           - If perks.length > 0: Show perk cards
           - If perks.length === 0: Show empty state (after the map)
         */}
         {perks.map(perk => (
-          
           <Link
             key={perk._id}
-           
+            to={`/perks/${perk._id}`} // === ADDED: Example link, update as needed ===
             className="card hover:shadow-lg transition-shadow cursor-pointer"
           >
             {/* Perk Title */}
@@ -235,12 +253,12 @@ export default function AllPerks() {
                   {perk.merchant}
                 </div>
               )}
-              
+
               <div className="flex items-center gap-1">
                 <span className="material-symbols-outlined text-xs">category</span>
                 <span className="capitalize">{perk.category}</span>
               </div>
-              
+
               {perk.discountPercent > 0 && (
                 <div className="flex items-center gap-1 text-green-600 font-semibold">
                   <span className="material-symbols-outlined text-xs">local_offer</span>
@@ -265,7 +283,6 @@ export default function AllPerks() {
           </Link>
         ))}
 
-        
         {perks.length === 0 && !loading && (
           <div className="col-span-full text-center py-12 text-zinc-600">
             <span className="material-symbols-outlined text-5xl mb-4 block text-zinc-400">
@@ -276,7 +293,6 @@ export default function AllPerks() {
           </div>
         )}
 
-        
         {loading && perks.length === 0 && (
           <div className="col-span-full text-center py-12 text-zinc-600">
             <span className="material-symbols-outlined text-5xl mb-4 block text-zinc-400 animate-spin">
@@ -289,4 +305,3 @@ export default function AllPerks() {
     </div>
   )
 }
-
